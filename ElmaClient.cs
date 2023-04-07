@@ -10,13 +10,13 @@ using TypesElma;
 
 namespace Elma;
 
-public class ElmaClient 
+class ElmaClient 
 {
     private string ElmaTokenApi;
     private readonly HttpClient _httpClient;
     private readonly string Username;
     private readonly string Password;
-    private ResponseAuthorization? AuthorizationData;
+    public ResponseAuthorization? AuthorizationData;
     private List<ObjectElma> Objects = new List<ObjectElma>(); // all available entities in elma
     private List<ObjectElma> Processes = new List<ObjectElma>(); // all processes in elma
     private List<EnumElma> Enums = new List<EnumElma>(); // all available enums in server elma
@@ -49,9 +49,9 @@ public class ElmaClient
     // url to html page with specifit Enum's information (also will need UrlParameter 'uid')
     private readonly string UrlPageEnum = "/API/Help/Enum";
 
-    public ElmaClient(string elmaTokenApi, string hostaddress, string username, string password)
+    public ElmaClient(string token, string hostaddress, string username, string password)
     {
-        this.ElmaTokenApi = elmaTokenApi;
+        this.ElmaTokenApi = token;
         this.Username = username;
         this.Password = password;
         this._httpClient = new() { BaseAddress = new Uri($"http://{hostaddress}") };
@@ -70,6 +70,22 @@ public class ElmaClient
         return this;
     }
 
+    /// <summary>
+    /// check if authToken and sessionToken is no more active. Then get new tokens by IServiceAuthorization
+    /// </summary>
+    public async Task RefreshToken() 
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, " /API/REST/Authorization/ServerTimeUTC");
+
+        var response = await _httpClient.SendAsync(request);
+
+        if ((int)response.StatusCode == 400)
+        {
+            var convertJson = await response.Content.ReadFromJsonAsync<ResponseElma>();
+            await GetAuthorization();
+        }
+    }
+
     public PrepareHttpStartProcess StartProcess(string nameProcess)
     {
         var tryFindProcessElma = this.StartableProcesses?
@@ -80,7 +96,7 @@ public class ElmaClient
                 + $"All available process:> {String.Join(", ", StartableProcesses!.Select(elm => elm.Name))}");
 
 
-        var prepareRequest = new PrepareHttpStartProcess(this._httpClient, UrlStartProcess);
+        var prepareRequest = new PrepareHttpStartProcess(this._httpClient, UrlStartProcess, RefreshToken);
         prepareRequest.WebItem("ProcessHeaderId", tryFindProcessElma.Id.ToString());
         prepareRequest.WebItem("ProcessName", tryFindProcessElma.Name);
 
@@ -201,6 +217,9 @@ public class ElmaClient
         }
     }
 
+    /// <summary>
+    /// for every elma object add for them their fileds name
+    /// </summary>
     private async Task GetNamesItemsForObjects()
     {
         // for all elma objects add for them fields' name for every one
@@ -240,21 +259,28 @@ public class ElmaClient
             throw new Exception($"Get authorization was unsuccessful. "
                 + "Check parameters authorization: hostaddress, password, token, userlogin");
 
-        this.AuthorizationData = await response.Content.ReadFromJsonAsync<ResponseAuthorization>();
+        AuthorizationData = await response.Content.ReadFromJsonAsync<ResponseAuthorization>();
 
         // automatically add tokens to every request's headers form this client to server http
+        _httpClient.DefaultRequestHeaders.Clear();
         _httpClient.DefaultRequestHeaders.Add("AuthToken", AuthorizationData?.AuthToken);
         _httpClient.DefaultRequestHeaders.Add("SessionToken", AuthorizationData?.SessionToken);
     }
 
     /// <summary> получение сущностей (объект-справочник) от сервера elma </summary>
     /// <param name="type">имя униклього идентификтора типа сущности elma</param>
-    public PrepareHttpQuery<List<WebData>> QueryEntity(string type) // QParams queryParams = null
+    public PrepareHttpQuery<List<WebData>> QueryEntity(string type)
     {
         // получаем тип обьекта по его наименованию и его TypeUID для запросов
         var getTypeObj = this.GetTypeObj(type, TypesObj.Entity);
-        
-        var prepareQuery = new PrepareHttpQuery<List<WebData>>(_httpClient, getTypeObj.Uid, UrlEntityQueryTree, HttpMethod.Get);
+
+        var prepareQuery = new PrepareHttpQuery<List<WebData>>(
+            _httpClient, 
+            getTypeObj.Uid, 
+            UrlEntityQueryTree, 
+            HttpMethod.Get,
+            RefreshToken);
+
         prepareQuery.TypeUid(getTypeObj.Uid);
 
         return prepareQuery;
@@ -268,7 +294,7 @@ public class ElmaClient
         // получаем тип обьекта по его наименованию и его TypeUID для запросов
         var getTypeObj = this.GetTypeObj(type, TypesObj.Entity);
 
-        var prepareLoad = new PrepareHttpLoad<WebData>(_httpClient,  UrlEntityLoadTree, HttpMethod.Get, id);
+        var prepareLoad = new PrepareHttpLoad<WebData>(_httpClient,  UrlEntityLoadTree, HttpMethod.Get, id, RefreshToken);
         prepareLoad.TypeUid(getTypeObj.Uid);
 
         return prepareLoad;
@@ -278,6 +304,9 @@ public class ElmaClient
     /// <param name="type">имя униклього идентификтора типа сущности elma</param>
     public async Task<int> CountEntity(string type)
     {
+        // for update AuthToken and SessionToken if they'are not actual
+        await RefreshToken();
+
         // получаем тип обьекта по его наименованию и его TypeUID для запросов
         var getTypeObj = this.GetTypeObj(type, TypesObj.Entity);
 
@@ -297,7 +326,8 @@ public class ElmaClient
             _httpClient, 
             getTypeObj, 
             UrlEntityInsert + getTypeObj.Uid, 
-            HttpMethod.Post);
+            HttpMethod.Post,
+            RefreshToken);
     }
 
     /// <summary> update entity via id with new data </summary>
@@ -312,7 +342,8 @@ public class ElmaClient
             _httpClient, 
             getTypeObj, 
             String.Format(UrlEntiityUpdate, getTypeObj.Uid, id),
-            HttpMethod.Post);
+            HttpMethod.Post,
+            RefreshToken);
     }
 
     /// <summary>
@@ -421,7 +452,7 @@ public class ElmaClient
         return tryFind;
     }
 
-    public string getEnumValue(string nameEnum, string valueEnum)
+    public string GetEnumValue(string nameEnum, string valueEnum)
     {
         var tryFindEnum = Enums.FirstOrDefault(enumElma =>
             enumElma.Name == nameEnum);
@@ -432,7 +463,7 @@ public class ElmaClient
 
         // if the found enum don't have any Values then throw exception
         if (tryFindEnum.Values == null)
-            throw new Exception($"The enum '{nameEnum}' don't have any values");
+            throw new Exception($"The enum '{nameEnum}' doesn't have any values");
 
 
         var tryFindIndexOfValue = Array.IndexOf(tryFindEnum.Values, valueEnum);

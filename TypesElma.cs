@@ -25,6 +25,15 @@ public class WebDataItem
 }
 // * ///////////////////////////////////////////// Main Response with Entities
 
+public delegate Task RefreshTokenDelegate();
+
+public class ResponseElma 
+{
+    public object InnerException { get; set; } = default!;
+    public string Message { get; set; } = default!;
+    public int StatusCode { get; set; }
+}
+
 /// <summary>
 /// every Uid is unique and can't be repeated (it's fair for Processes and Entities)
 /// </summary>
@@ -160,11 +169,13 @@ public class PrepareHttpBase<T> : QParamsBase, IPrepareHttpBase<T>
     protected NameValueCollection queryParamsUrl = HttpUtility.ParseQueryString(string.Empty);
     protected string pathUrl;
     protected HttpMethod httpMethod;
-    public PrepareHttpBase(HttpClient httpClient, string pathUrl, HttpMethod httpMethod) : base()
+    protected RefreshTokenDelegate refToken;
+    public PrepareHttpBase(HttpClient httpClient, string pathUrl, HttpMethod httpMethod, RefreshTokenDelegate refToken) : base()
     {
         this._httpClient = httpClient;
         this.pathUrl = pathUrl;
         this.httpMethod = httpMethod;
+        this.refToken = refToken;
     }
     
     /// <summary>
@@ -172,6 +183,9 @@ public class PrepareHttpBase<T> : QParamsBase, IPrepareHttpBase<T>
     /// </summary>
     public async Task<T?> Execute()
     {
+        // for update AuthToken and SessionToken if they'are not actual
+        await refToken();
+
         if (this.Params.Count != 0)
         {
             foreach (var record in this.Params)
@@ -196,8 +210,8 @@ public class PrepareHttpBase<T> : QParamsBase, IPrepareHttpBase<T>
 
 public class PrepareHttpQuery<T> : PrepareHttpBase<T>
 {
-    public PrepareHttpQuery(HttpClient httpClient, string typeUid, string pathUrl, HttpMethod httpMethod)
-         : base(httpClient, pathUrl, httpMethod) { }
+    public PrepareHttpQuery(HttpClient httpClient, string typeUid, string pathUrl, HttpMethod httpMethod, RefreshTokenDelegate refToken)
+         : base(httpClient, pathUrl, httpMethod, refToken) { }
 
     public new PrepareHttpQuery<T> TypeUid(string value) 
     {
@@ -255,8 +269,8 @@ public class PrepareHttpQuery<T> : PrepareHttpBase<T>
 }
 public class PrepareHttpLoad<T> : PrepareHttpBase<T>
 {
-    public PrepareHttpLoad(HttpClient httpClient, string pathUrl, HttpMethod httpMethod, int id)
-        : base(httpClient, pathUrl, httpMethod) 
+    public PrepareHttpLoad(HttpClient httpClient, string pathUrl, HttpMethod httpMethod, int id, RefreshTokenDelegate refToken)
+        : base(httpClient, pathUrl, httpMethod, refToken) 
     {
         this.Id(id);
     }
@@ -287,14 +301,17 @@ public class PrepareHttpInsertOrUpdate : PrepareHttpBase<int>
 {
     public WebData webData = new WebData();
     public ObjectElma typeObj;
-    public PrepareHttpInsertOrUpdate(HttpClient httpClient, ObjectElma typeObj, string pathUrl, HttpMethod httpMethod)
-        : base(httpClient, pathUrl, httpMethod) 
+    public PrepareHttpInsertOrUpdate(HttpClient httpClient, ObjectElma typeObj, string pathUrl, HttpMethod httpMethod, RefreshTokenDelegate refToken)
+        : base(httpClient, pathUrl, httpMethod, refToken) 
     {
         this.typeObj = typeObj;
     }
 
     public async new Task<int> Execute()
     {
+        // for update AuthToken and SessionToken if they'are not actual
+        await refToken();
+
         var request = new HttpRequestMessage(httpMethod, pathUrl);
 
         request.Content = new StringContent(JsonConvert.SerializeObject(webData), Encoding.UTF8, "application/json");
@@ -365,15 +382,20 @@ public class PrepareHttpStartProcess
     protected HttpClient _httpClient;
     public WebData webData = new WebData();
     private string pathUrl;
+    protected RefreshTokenDelegate refToken;
 
-    public PrepareHttpStartProcess(HttpClient httpClient, string pathUrl)
+    public PrepareHttpStartProcess(HttpClient httpClient, string pathUrl, RefreshTokenDelegate refToken)
     {
         this._httpClient = httpClient;
         this.pathUrl = pathUrl;
+        this.refToken = refToken;
     }
 
     public async Task<WebData?> Execute()
     {
+        // for update AuthToken and SessionToken if they'are not actual
+        await refToken();
+
         System.Console.WriteLine(JsonConvert.SerializeObject(webData));
         // if data wasn't provided then throw an exception
         if (webData == null) throw new Exception("Field webData is null. Need data to upload to server");
