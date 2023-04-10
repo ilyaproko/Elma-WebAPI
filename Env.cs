@@ -6,12 +6,14 @@ namespace EnvironmentModule;
 
 class EnvModule
 {
-    string pathFile = Path.Combine(Environment.CurrentDirectory, ".env");
+    string pathFile;
 
     List<EnvRecord> envsList = new List<EnvRecord>();
 
-    public EnvModule()
+    public EnvModule(string fileName)
     {
+        this.pathFile = Path.Combine(Environment.CurrentDirectory, fileName);
+
         if (File.Exists(this.pathFile))
         {
             string[] lines = File.ReadAllText(this.pathFile).Split("\n");
@@ -30,7 +32,7 @@ class EnvModule
         }
         else
         {
-            throw new Exception($"File \".env\" isn't found in directory: {Environment.CurrentDirectory}");
+            throw new Exception($"File \"{fileName}\" isn't found in directory: {Environment.CurrentDirectory}");
         }
     }
 
@@ -39,7 +41,7 @@ class EnvModule
     /// the won't find a record with a certain key then throw exception
     /// Warn: look carefully at letter case.
     /// </summary>
-    public string getVar(string key)
+    public string GetVar(string key)
     {
         var tryFind = envsList.FirstOrDefault(e => e.Key == key)?.Value;
         
