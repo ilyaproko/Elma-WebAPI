@@ -149,14 +149,14 @@ class ElmaClient
 
         this.StartableProcesses = findProcesses!.DataArray!.Select(webData =>
         {
-            var nameProcess = webData.Items.FirstOrDefault(webItem => webItem.Name == "Name");
-            var idProcess = webData.Items.FirstOrDefault(webItem => webItem.Name == "Id");
+            var nameProcess = webData.Items.First(webItem => webItem.Name == "Name");
+            var idProcess = webData.Items.First(webItem => webItem.Name == "Id");
             var groupIdProcess = webData.Items.FirstOrDefault(webItem => webItem.Name == "GroupId");
             return new ProcessElma
             {
-                Name = nameProcess!.Value,
-                Id = int.Parse(idProcess!.Value),
-                GroupId = groupIdProcess == null ? null : int.Parse(groupIdProcess.Value)
+                Name = nameProcess.Value!,
+                Id = int.Parse(idProcess.Value!),
+                GroupId = groupIdProcess == null ? null : int.Parse(groupIdProcess.Value!)
             };
         }).ToList();
     }

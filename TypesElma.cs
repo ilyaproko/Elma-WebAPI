@@ -18,10 +18,10 @@ public class WebData
 }
 public class WebDataItem
 {
-    public WebData? Data { get; set; }
-    public List<WebData>? DataArray { get; set; }
+    public WebData? Data { get; set; } = default!;
+    public List<WebData> DataArray { get; set; } = default!;
     public string Name { get; set; } = default!;
-    public string Value { get; set; } = default!;
+    public string? Value { get; set; } = default!;
 }
 // * ///////////////////////////////////////////// Main Response with Entities
 
@@ -355,12 +355,13 @@ public class PrepareHttpInsertOrUpdate : PrepareHttpBase<int>
     }
     
     /// <summary>
-    /// Создать новый WebItem с названием nameObject и значением вложенного WebItem c названием nameItem и значением value, 
-    /// Если такой WebItem c nameObject уже есть тогда уже нет потребшности заменять его, будет происходить замена
-    /// уже вложенных WebItem если будет совпадение по названию nameItem. Перед созданием происходит проверка
-    /// названия WebItem name, есть ли похожее поле в Объекте Elma, если нет тогда выбросит ошибку
+    /// Создать новый WebItem ссылка на завизимый объект другой сущности,
+    /// в параметре нужно указать имя поля (Item) для которой создатеся ссылка на объект,
+    /// вторым аргументов указывается уникальный идентификатор сущности на которую будет 
+    /// ссылвться данное поле. Чтобы указать что поле не ссылается ни на один объект нужно
+    /// вторым аргументом передать значение null
     /// </summary>
-    public PrepareHttpInsertOrUpdate WebItem(string nameObject, string nameItem, string value) 
+    public PrepareHttpInsertOrUpdate WebItemRefObject(string nameObject, int? entityId) 
     {
         // check if the name exists for certain object elma which the WebItem creating
         // if the Name Of creating Item don't specified then throw Exception
@@ -372,7 +373,28 @@ public class PrepareHttpInsertOrUpdate : PrepareHttpBase<int>
             );
         }
 
-        CreatePayloadHttpElma.WebItem(nameObject, nameItem, value, ref webData);
+        CreatePayloadHttpElma.WebItemRefObject(nameObject, entityId, ref webData);
+        return this;
+    }
+
+    /// <summary>
+    /// Создание WebItem с массивом ссылок на другие сущнсоти (аналог foreign key в базе данных где свзять 1-N или N-N)
+    /// </summary>
+    /// <param name="nameItem">Item's name</param>
+    /// <param name="entitisId">Lifst of unique Objects' ids which is referenced</param>
+    public PrepareHttpInsertOrUpdate WebItemRefObjects(string nameItem, List<int>? entitisId)
+    {
+        // check if the name exists for certain object elma which the WebItem creating
+        // if the Name Of creating Item don't specified then throw Exception
+        if (!this.typeObj.NamesFields.Contains(nameItem))
+        {
+            throw new Exception(
+                $"Elma Object \"{typeObj.Name}\", don't have field \"{nameItem}\". "
+                + $"Available fileds: {String.Join(", ", typeObj.NamesFields)}"
+            );
+        }
+
+        CreatePayloadHttpElma.WebItemRefObjects(nameItem, entitisId?.Distinct().ToList(), ref webData);
         return this;
     }
 }
@@ -432,13 +454,15 @@ public class PrepareHttpStartProcess
     }
     
     /// <summary>
-    /// Создать новый WebItem с названием nameObject и значением вложенного WebItem c названием nameItem и значением value, 
-    /// Если такой WebItem c nameObject уже есть тогда уже нет потребшности заменять его, будет происходить замена
-    /// уже вложенных WebItem если будет совпадение по названию nameItem.
+    /// Создать новый WebItem ссылка на завизимый объект другой сущности,
+    /// в параметре нужно указать имя поля (Item) для которой создатеся ссылка на объект,
+    /// вторым аргументов указывается уникальный идентификатор сущности на которую будет 
+    /// ссылвться данное поле. Чтобы указать что поле не ссылается ни на один объект нужно
+    /// вторым аргументом передать значение null
     /// </summary>
-    public PrepareHttpStartProcess WebItem(string nameObject, string nameItem, string value) 
+    public PrepareHttpStartProcess WebItemRefObject(string nameItem, int? id) 
     {
-        CreatePayloadHttpElma.WebItem(nameObject, nameItem, value, ref webData);
+        CreatePayloadHttpElma.WebItemRefObject(nameItem, id, ref webData);
         return this;
     }
 }
@@ -458,36 +482,118 @@ static class CreatePayloadHttpElma
             tryFindItemByName.Value = value;
     }
     
-    static public void WebItem(string nameObject, string nameItem, string value, ref WebData webData) 
+    static public void WebItemRefObject(string nameItem, int? id, ref WebData webData) 
     {
         webData ??= new WebData();
         webData.Items ??= new List<WebDataItem>();
 
         var tryFindDependency = webData.Items.FirstOrDefault(item => 
-            item.Name == nameObject);
+            item.Name == nameItem);
 
         // if didn't create before, then create new
         if (tryFindDependency == null)
         {
+            if (id == null)
+            {
+                // create new item
+                webData.Items.Add(
+                    new WebDataItem { Name = nameItem, Data = null }
+                );
+                return;
+            }
+
             // create new item
             webData.Items.Add(
-                new WebDataItem { Name = nameObject, Data = new WebData { Items = new List<WebDataItem>() } }
+                new WebDataItem { Name = nameItem, Data = new WebData { Items = new List<WebDataItem>() } }
             );
             
-            var findNewItem = webData.Items.First(item => item.Name == nameObject);
+            var findNewItem = webData.Items.First(item => item.Name == nameItem);
 
             // add new item for referenced object
-            findNewItem?.Data?.Items?.Add(new WebDataItem { Name = nameItem, Value = value });
+            findNewItem.Data?.Items?.Add(new WebDataItem { Name = "Id", Value = id.ToString()! });
         }
         else 
         {
             // check if item with 'nameItem' for referenced object has already created before 
-            var tryFindItemRefObj = tryFindDependency?.Data?.Items?.FirstOrDefault(item => item.Name == nameItem);
+            var tryFindItemRefObj = tryFindDependency.Data?.Items?.FirstOrDefault(item => item.Name == "Id");
+
+            if (id == null)
+            {
+                tryFindDependency.Data = null;
+                return;
+            }
 
             if (tryFindItemRefObj == null)
-                tryFindDependency?.Data?.Items?.Add(new WebDataItem { Name = nameItem, Value = value });
+            {
+                tryFindDependency.Data = new WebData { 
+                    Items = new List<WebDataItem> { 
+                        new WebDataItem { Name = "Id", Value = id.ToString() } 
+                    } 
+                };
+            }
             else
-                tryFindItemRefObj.Value = value;
+            {
+                tryFindItemRefObj.Value = id.ToString();
+            }  
+        }
+    }
+
+    static public void WebItemRefObjects(string nameItem, List<int>? refsObjects, ref WebData webData)
+    {
+        webData ??= new WebData();
+        webData.Items ??= new List<WebDataItem>();
+
+        var tryFindItemDependencies = webData.Items.FirstOrDefault(item => item.Name == nameItem);
+
+        // if didn't create before, then create new
+        if (tryFindItemDependencies == null)
+        {
+            // temporary storage
+            List<WebData> arrayRefObjects = new List<WebData>();
+
+            refsObjects?.ForEach(refId =>
+            {
+                WebData newRefObj = new WebData
+                {
+                    Items = new List<WebDataItem> { new WebDataItem { Name = "Id", Value = refId.ToString() } }
+                };
+
+                arrayRefObjects.Add(newRefObj);
+            });
+
+            // create new item with reference objects
+            webData.Items.Add(
+                new WebDataItem { Name = nameItem, DataArray = arrayRefObjects }
+            );
+        }
+        else 
+        {
+            // for delete all dependencies objects
+            if (refsObjects == null) 
+            {
+                tryFindItemDependencies.DataArray = new List<WebData>();
+                return;
+            }
+
+            refsObjects.ForEach(refId =>
+            {
+                var existOrNotItemInArray = tryFindItemDependencies.DataArray.FirstOrDefault(webData =>
+                {
+                    var tempItem = webData.Items.First(item => item.Name == "Id");
+                    return int.Parse(tempItem.Value!) == refId;
+                });
+
+                if (existOrNotItemInArray == null)
+                    tryFindItemDependencies.DataArray.Add(
+                        new WebData { 
+                            Items = new List<WebDataItem> { 
+                                new WebDataItem { Name = "Id", Value = refId.ToString()}
+                            }
+                        }
+                    );
+
+            });
+
         }
     }
 }

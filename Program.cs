@@ -28,13 +28,12 @@ var elmaClient = await new ElmaClient(token, hostaddress, username, password).Bu
 //     counter += 60;
 // }
 
-// var test = await elmaClient.QueryEntity("User").Eql("FirstName LIKE 'В%'").Execute();
+// var newArrayItem = elmaClient.UpdateEntity("UchebnyePlany", id: 834);
 
-// System.Console.WriteLine(
-//     JsonConvert.SerializeObject(
-//         await elmaClient.LoadEntity("UchebnyePlany", id: 103).Execute()
-//     )
-// );
+// newArrayItem.WebItemRefObject("GroupMain", entityId: 2139);
+// newArrayItem.WebItemRefObjects("ListReferences", new List<int> { 2139, 2140 });
+// System.Console.WriteLine(JsonConvert.SerializeObject(newArrayItem.webData));
 
+// await newArrayItem.Execute();
 
 
