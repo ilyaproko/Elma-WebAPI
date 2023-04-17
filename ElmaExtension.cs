@@ -4,80 +4,13 @@ using System.Net.Http.Json;
 using System.Text;
 using Newtonsoft.Json;
 using System.Net.Http.Headers;
-using Elma;
+using Elmapi;
 using System.ComponentModel.DataAnnotations;
+using ElmaType;
+using System.Linq;
 
-namespace TypesElma;
+namespace ExtensionElma;
 
-
-// * ////////////////////////////////////////////// Main Response with Entities
-public class WebData
-{
-    public List<WebDataItem> Items { get; set; } = default!;
-    public object Value { get; set; } = default!;
-}
-public class WebDataItem
-{
-    public WebData? Data { get; set; } = default!;
-    public List<WebData> DataArray { get; set; } = default!;
-    public string Name { get; set; } = default!;
-    public string? Value { get; set; } = default!;
-}
-// * ///////////////////////////////////////////// Main Response with Entities
-
-public delegate Task RefreshTokenDelegate();
-
-public class ResponseElma 
-{
-    public object InnerException { get; set; } = default!;
-    public string Message { get; set; } = default!;
-    public int StatusCode { get; set; }
-}
-
-/// <summary>
-/// every Uid is unique and can't be repeated (it's fair for Processes and Entities)
-/// </summary>
-public class ObjectElma 
-{
-    public string Name { get; set; } = default!;
-    /// <summary> уникальный идентификатор типа </summary>
-    public string Uid { get; set; }  = default!;
-    public string NameDesc { get; set; } = default!;
-    public List<string> NamesFields { get; set; } = default!;
-}
-/// <summary>
-/// Enum from Server Elma, every Uid is unique and can't be repeated
-/// </summary>
-public class EnumElma
-{
-    public string Name { get; set; } = default!;
-    /// <summary> уникальный идентификатор типа </summary>
-    public string Uid { get; set; }  = default!;
-    public string NameDesc { get; set; } = default!;
-    /// <summary> Can be NULL !!! </summary>
-    public string[]? Values { get; set; }
-}
-public enum TypesObj 
-{
-    Process, 
-    Entity
-}
-
-/// <summary> Business Processes which is available in Server Elma </summary>
-public class ProcessElma
-{
-    public string Name { get; set; } = default!;
-    public int Id { get; set; }
-    public int? GroupId { get; set; } = null;
-}
-
-class ResponseAuthorization
-{
-    public string AuthToken { get; set; } = default!;
-    public string CurrentUserId { get; set; } = default!;
-    public string Lang { get; set; } = default!;
-    public string SessionToken { get; set; } = default!;
-}
 
 public class QParamsBase
 {
@@ -144,7 +77,7 @@ public class QParamsBase
     }
 
     /// <summary> search by a certain id </summary>
-    protected QParamsBase Id(int id) 
+    protected QParamsBase Id(long id) 
     {
         this.Add("id", id.ToString());
         return  this;
@@ -157,7 +90,6 @@ public class QParamsBase
         return  this;
     }
 }
-
 interface IPrepareHttpBase<T>
 {
     public Task<T?> Execute();
@@ -269,7 +201,7 @@ public class PrepareHttpQuery<T> : PrepareHttpBase<T>
 }
 public class PrepareHttpLoad<T> : PrepareHttpBase<T>
 {
-    public PrepareHttpLoad(HttpClient httpClient, string pathUrl, HttpMethod httpMethod, int id, RefreshTokenDelegate refToken)
+    public PrepareHttpLoad(HttpClient httpClient, string pathUrl, HttpMethod httpMethod, long id, RefreshTokenDelegate refToken)
         : base(httpClient, pathUrl, httpMethod, refToken) 
     {
         this.Id(id);
@@ -297,14 +229,28 @@ public class PrepareHttpLoad<T> : PrepareHttpBase<T>
     }
 }
 
-public class PrepareHttpInsertOrUpdate : PrepareHttpBase<int>
+public class PrepareHttpInsertUpdate : PrepareHttpBase<int>
 {
     public WebData webData = new WebData();
-    public ObjectElma typeObj;
-    public PrepareHttpInsertOrUpdate(HttpClient httpClient, ObjectElma typeObj, string pathUrl, HttpMethod httpMethod, RefreshTokenDelegate refToken)
+    public ObjectElma TypeObject;
+    private List<ObjectElma> AvailableElmaObjects;
+    private ElmaClient _elmaClient;
+    private long? CurrentIdObject;
+    public PrepareHttpInsertUpdate(
+        HttpClient httpClient,
+        ObjectElma typeObj,
+        string pathUrl,
+        HttpMethod httpMethod,
+        RefreshTokenDelegate refToken,
+        List<ObjectElma> availableObjects,
+        ElmaClient elmaClient,
+        long? currentIdObject = null)
         : base(httpClient, pathUrl, httpMethod, refToken) 
     {
-        this.typeObj = typeObj;
+        TypeObject = typeObj;
+        AvailableElmaObjects = availableObjects;
+        _elmaClient = elmaClient;
+        CurrentIdObject = currentIdObject;
     }
 
     public async new Task<int> Execute()
@@ -338,15 +284,15 @@ public class PrepareHttpInsertOrUpdate : PrepareHttpBase<int>
     /// тогда заменит значение в данном WebItem с названием name. Перед созданием происходит проверка
     /// названия WebItem name, есть ли похожее поле в Объекте Elma, если нет тогда выбросит ошибку
     /// </summary>
-    public PrepareHttpInsertOrUpdate WebItem(string name, string value)
+    public PrepareHttpInsertUpdate WebItem(string name, string value)
     {
         // check if the name exists for certain object elma which the WebItem creating
         // if the Name Of creating Item don't specified then throw Exception
-        if (!this.typeObj.NamesFields.Contains(name))
+        if (!this.TypeObject.NamesFields.Contains(name))
         {
             throw new Exception(
-                $"Elma Object \"{typeObj.Name}\", don't have field \"{name}\". "
-                + $"Available fileds: {String.Join(", ", typeObj.NamesFields)}"
+                $"Elma Object \"{TypeObject.Name}\", don't have field \"{name}\". "
+                + $"Available fileds: {String.Join(", ", TypeObject.NamesFields)}"
             );
         }
 
@@ -361,41 +307,44 @@ public class PrepareHttpInsertOrUpdate : PrepareHttpBase<int>
     /// ссылвться данное поле. Чтобы указать что поле не ссылается ни на один объект нужно
     /// вторым аргументом передать значение null
     /// </summary>
-    public PrepareHttpInsertOrUpdate WebItemRefObject(string nameObject, int? entityId) 
+    public WebItemObject ItemObject(string nameItem) 
     {
         // check if the name exists for certain object elma which the WebItem creating
         // if the Name Of creating Item don't specified then throw Exception
-        if (!this.typeObj.NamesFields.Contains(nameObject))
+        if (!this.TypeObject.NamesFields.Contains(nameItem))
         {
             throw new Exception(
-                $"Elma Object \"{typeObj.Name}\", don't have field \"{nameObject}\". "
-                + $"Available fileds: {String.Join(", ", typeObj.NamesFields)}"
+                $"Elma Object \"{TypeObject.Name}\", don't have field \"{nameItem}\". "
+                + $"Available fileds: {String.Join(", ", TypeObject.NamesFields)}"
             );
         }
 
-        CreatePayloadHttpElma.WebItemRefObject(nameObject, entityId, ref webData);
-        return this;
+        return new WebItemObject(nameItem, ref webData, AvailableElmaObjects, _elmaClient);
     }
 
     /// <summary>
     /// Создание WebItem с массивом ссылок на другие сущнсоти (аналог foreign key в базе данных где свзять 1-N или N-N)
     /// </summary>
     /// <param name="nameItem">Item's name</param>
-    /// <param name="entitisId">Lifst of unique Objects' ids which is referenced</param>
-    public PrepareHttpInsertOrUpdate WebItemRefObjects(string nameItem, List<int>? entitisId)
+    public WebItemObjects ItemObjects(string nameItem)
     {
         // check if the name exists for certain object elma which the WebItem creating
         // if the Name Of creating Item don't specified then throw Exception
-        if (!this.typeObj.NamesFields.Contains(nameItem))
+        if (!this.TypeObject.NamesFields.Contains(nameItem))
         {
             throw new Exception(
-                $"Elma Object \"{typeObj.Name}\", don't have field \"{nameItem}\". "
-                + $"Available fileds: {String.Join(", ", typeObj.NamesFields)}"
+                $"Elma Object \"{TypeObject.Name}\", don't have field \"{nameItem}\". "
+                + $"Available fileds: {String.Join(", ", TypeObject.NamesFields)}"
             );
         }
 
-        CreatePayloadHttpElma.WebItemRefObjects(nameItem, entitisId?.Distinct().ToList(), ref webData);
-        return this;
+        return new WebItemObjects(
+            nameItem,
+            ref webData,
+            AvailableElmaObjects,
+            _elmaClient,
+            (long)CurrentIdObject!,
+            this.TypeObject.Name);
     }
 }
 
@@ -482,7 +431,7 @@ static class CreatePayloadHttpElma
             tryFindItemByName.Value = value;
     }
     
-    static public void WebItemRefObject(string nameItem, int? id, ref WebData webData) 
+    static public void WebItemRefObject(string nameItem, Int64? id, ref WebData webData) 
     {
         webData ??= new WebData();
         webData.Items ??= new List<WebDataItem>();
@@ -538,7 +487,7 @@ static class CreatePayloadHttpElma
         }
     }
 
-    static public void WebItemRefObjects(string nameItem, List<int>? refsObjects, ref WebData webData)
+    static public void WebItemRefObjects(string nameItem, List<long>? refsObjects, ref WebData webData)
     {
         webData ??= new WebData();
         webData.Items ??= new List<WebDataItem>();
@@ -595,5 +544,146 @@ static class CreatePayloadHttpElma
             });
 
         }
+    }
+}
+
+public class BaseRefItem
+{
+    public WebData WebData;
+    public string NameItem;
+    public List<ObjectElma> AvailableElmaObjects;
+    protected ElmaClient _elmaClient;
+    public BaseRefItem(string nameItem,
+                         ref WebData webData,
+                         List<ObjectElma> availableElmaObjects,
+                         ElmaClient elmaClient)
+    {
+        WebData = webData;
+        NameItem = nameItem;
+        AvailableElmaObjects = availableElmaObjects;
+        _elmaClient = elmaClient;
+    }
+}
+
+public class WebItemObject : BaseRefItem
+{
+    public WebItemObject(
+        string nameItem,
+        ref WebData webData,
+        List<ObjectElma> availableElmaObjects,
+        ElmaClient elmaClient) 
+        : base(
+            nameItem,
+            ref webData,
+            availableElmaObjects,
+            elmaClient) { }
+
+    /// <summary>
+    /// Make reference to object with name parameter "nameObject" and its id "entityId".
+    /// Validate the object with name "nameObject" exist, if so check there is entity with id "entityId"
+    /// </summary>
+    async public Task Ref(string nameObject, Int64 id)
+    {
+        if (AvailableElmaObjects.FirstOrDefault(obj => obj.Name == nameObject) == null)
+            throw new Exception($"Elma entity with name \"{nameObject}\" isn't exist in server.");
+
+        try
+            { await _elmaClient.LoadEntity(nameObject, id).Execute(); }
+        catch (Exception ex)
+            { throw new Exception($"Elma entity with id \"{id}\" isn't exist in Object \"{nameObject}\". " + ex.Message); }
+
+        CreatePayloadHttpElma.WebItemRefObject(NameItem, id, ref WebData);
+    }
+
+    /// <summary>
+    /// Clear the reference to object
+    /// </summary>
+    public void SetNull()
+    {
+        CreatePayloadHttpElma.WebItemRefObject(NameItem, null, ref WebData);
+    }
+}
+
+public class WebItemObjects : BaseRefItem
+{
+    public long CurrentIdObject;
+    public string NameObject;
+    public WebItemObjects(
+        string nameItem,
+        ref WebData webData,
+        List<ObjectElma> availableElmaObjects,
+        ElmaClient elmaClient,
+        long currentIdObject,
+        string nameObject
+        ) 
+        : base(
+            nameItem,
+            ref webData,
+            availableElmaObjects,
+            elmaClient) 
+    {
+        CurrentIdObject = currentIdObject;
+        NameObject = nameObject;
+    }
+
+    /// <summary>
+    /// Make reference to objects with name parameter "nameObject" and its id "entityId".
+    /// Validate the object with name "nameObject" exist, if so check there is entity with id "entityId"
+    /// </summary>
+    async public Task Ref(string nameObject, params long[] ids)
+    {
+        if (AvailableElmaObjects.FirstOrDefault(obj => obj.Name == nameObject) == null)
+            throw new Exception($"Elma entity with name \"{nameObject}\" isn't exist in server.");
+
+        foreach (var id in ids)
+        {
+            try
+                { await _elmaClient.LoadEntity(nameObject, id).Execute(); }
+            catch (Exception ex)
+                { throw new Exception($"Elma entity with id \"{id}\" isn't exist in Object \"{nameObject}\". " + ex.Message); }
+        }
+
+        CreatePayloadHttpElma.WebItemRefObjects(NameItem, ids.ToList(), ref WebData);
+    }
+
+    /// <summary>
+    /// add new references to objects. Existing references to objects will be still in current object
+    /// </summary>
+    async public Task Add(string nameObject, params long[] ids)
+    {
+        if (AvailableElmaObjects.FirstOrDefault(obj => obj.Name == nameObject) == null)
+            throw new Exception($"Elma entity with name \"{nameObject}\" isn't exist in server.");
+
+        foreach (var id in ids)
+        {
+            try
+                { await _elmaClient.LoadEntity(nameObject, id).Execute(); }
+            catch (Exception ex)
+                { throw new Exception($"Elma entity with id \"{id}\" isn't exist in Object \"{nameObject}\". " + ex.Message); }
+        }
+
+        var getCurrentObject = await _elmaClient.LoadEntity(NameObject, CurrentIdObject).Execute();
+        var ItemIds = getCurrentObject!.Items.First(item => item.Name == NameItem);
+        var currIds = ItemIds.DataArray.Select(webData => webData.Items.First(item => item.Name == "Id").Value)
+            .Where(id => !String.IsNullOrEmpty(id))
+            .Select(id => long.Parse(id!)).ToList();
+
+        ids.ToList().ForEach(id =>
+        {
+            if (!currIds.Contains(id))
+            {
+                currIds.Add(id);
+            }
+        });
+
+        CreatePayloadHttpElma.WebItemRefObjects(NameItem, currIds, ref WebData);
+    }
+
+    /// <summary>
+    /// Clear WebItem the reference to objects
+    /// </summary>
+    public void SetEmpty()
+    {
+        CreatePayloadHttpElma.WebItemRefObjects(NameItem, null, ref WebData);
     }
 }

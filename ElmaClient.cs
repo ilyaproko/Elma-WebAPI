@@ -6,11 +6,12 @@ using System.Web;
 using EnvironmentModule;
 using HtmlAgilityPack;
 using Newtonsoft.Json;
-using TypesElma;
+using ExtensionElma;
+using ElmaType;
 
-namespace Elma;
+namespace Elmapi;
 
-class ElmaClient 
+public class ElmaClient 
 {
     private string ElmaTokenApi;
     private readonly HttpClient _httpClient;
@@ -287,12 +288,12 @@ class ElmaClient
     }
 
     /// <summary> get a certain entity by Its id </summary>
-    /// <param name="type">имя униклього идентификтора типа сущности elma</param>
+    /// <param name="nameEntity">имя униклього идентификтора типа сущности elma</param>
     /// <param name="id">entity's id which will be updated</param>
-    public PrepareHttpLoad<WebData> LoadEntity(string type, int id)
+    public PrepareHttpLoad<WebData> LoadEntity(string nameEntity, long id)
     {
         // получаем тип обьекта по его наименованию и его TypeUID для запросов
-        var getTypeObj = this.GetTypeObj(type, TypesObj.Entity);
+        var getTypeObj = this.GetTypeObj(nameEntity, TypesObj.Entity);
 
         var prepareLoad = new PrepareHttpLoad<WebData>(_httpClient,  UrlEntityLoadTree, HttpMethod.Get, id, RefreshToken);
         prepareLoad.TypeUid(getTypeObj.Uid);
@@ -317,33 +318,38 @@ class ElmaClient
 
     /// <summary> inserted new entity to server elma </summary>
     /// <param name="type">имя униклього идентификтора типа сущности elma</param>
-    public PrepareHttpInsertOrUpdate InsertEntity(string type)
+    public PrepareHttpInsertUpdate InsertEntity(string type)
     {
         // получаем тип обьекта по его наименованию и его TypeUID для запросов
         var getTypeObj = this.GetTypeObj(type, TypesObj.Entity);
 
-        return new PrepareHttpInsertOrUpdate(
+        return new PrepareHttpInsertUpdate(
             _httpClient, 
             getTypeObj, 
             UrlEntityInsert + getTypeObj.Uid, 
             HttpMethod.Post,
-            RefreshToken);
+            RefreshToken,
+            Objects,
+            this);
     }
 
     /// <summary> update entity via id with new data </summary>
     /// <param name="type">имя униклього идентификтора типа сущности elma</param>
     /// <param name="id">entity's id which will be updated</param>
-    public PrepareHttpInsertOrUpdate UpdateEntity(string type, int id)
+    public PrepareHttpInsertUpdate UpdateEntity(string type, long id)
     {
         // получаем тип обьекта по его наименованию и его TypeUID для запросов
         var getTypeObj = this.GetTypeObj(type, TypesObj.Entity);
 
-        return new PrepareHttpInsertOrUpdate(
+        return new PrepareHttpInsertUpdate(
             _httpClient, 
             getTypeObj, 
             String.Format(UrlEntiityUpdate, getTypeObj.Uid, id),
             HttpMethod.Post,
-            RefreshToken);
+            RefreshToken,
+            Objects,
+            this,
+            id);
     }
 
     /// <summary>

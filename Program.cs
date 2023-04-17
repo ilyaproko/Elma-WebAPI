@@ -1,5 +1,5 @@
 ﻿using EnvironmentModule;
-using Elma;
+using Elmapi;
 using Newtonsoft.Json;
 
 var env = new EnvModule(".env");
@@ -28,11 +28,19 @@ var elmaClient = await new ElmaClient(token, hostaddress, username, password).Bu
 //     counter += 60;
 // }
 
-// var newArrayItem = elmaClient.UpdateEntity("UchebnyePlany", id: 834);
+var testingObject = elmaClient.UpdateEntity("UchebnyePlany", id: 834);
 
-// newArrayItem.WebItemRefObject("GroupMain", entityId: 2139);
-// newArrayItem.WebItemRefObjects("ListReferences", new List<int> { 2139, 2140 });
-// System.Console.WriteLine(JsonConvert.SerializeObject(newArrayItem.webData));
+testingObject.ItemObject("GroupMain").SetNull();
+await testingObject.ItemObject("GroupMain").Ref("Gruppy", 4586);
+
+await testingObject.ItemObjects("ListReferences").Ref("Gruppy", 4843);
+await testingObject.ItemObjects("ListReferences").Add("Gruppy", 4840, 4841, 4842, 4843, 4843, 4843, 4843);
+await testingObject.ItemObjects("ListReferences").Add("Gruppy", new long[] { 4840, 4841, 4842, 4843, 4843, 4843, 4843 });
+testingObject.ItemObjects("ListReferences").SetEmpty();
+
+await testingObject.Execute();
+
+System.Console.WriteLine(JsonConvert.SerializeObject(testingObject.webData));
 
 // await newArrayItem.Execute();
 
