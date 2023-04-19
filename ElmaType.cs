@@ -69,3 +69,26 @@ public class ResponseAuthorization
     public string Lang { get; set; } = default!;
     public string SessionToken { get; set; } = default!;
 }
+
+public class TimeInterval
+{
+    public int Days = 0;
+    public byte Hours = 0;
+    public byte Minutes = 0;
+
+    /// <summary>
+    /// Hours between 0 and 23 (23 included). Minutes should be between 0 and 59 (59 included).
+    /// If hours or minutes has incorrect value then program will throw exception about it.
+    /// </summary>
+    public TimeInterval(int days = 0, byte hours = 0, byte minutes = 0)
+    {
+        if (hours >= 24) 
+            throw new Exception($"Hours should be between 0 and 23 (23 included) but got hours: {hours}");
+        if (minutes >= 60) 
+            throw new Exception($"Minutes should be between 0 and 59 (59 included) but got minutes: {minutes}");
+
+        Days = days;
+        Hours = hours;
+        Minutes = minutes;
+    }
+}

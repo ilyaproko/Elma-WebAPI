@@ -8,6 +8,7 @@ using Elmapi;
 using System.ComponentModel.DataAnnotations;
 using ElmaType;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace ExtensionElma;
 
@@ -284,7 +285,7 @@ public class PrepareHttpInsertUpdate : PrepareHttpBase<int>
     /// тогда заменит значение в данном WebItem с названием name. Перед созданием происходит проверка
     /// названия WebItem name, есть ли похожее поле в Объекте Elma, если нет тогда выбросит ошибку
     /// </summary>
-    public PrepareHttpInsertUpdate WebItem(string name, string? value)
+    private PrepareHttpInsertUpdate WebItem(string name, string? value)
     {
         // check if the name exists for certain object elma which the WebItem creating
         // if the Name Of creating Item don't specified then throw Exception
@@ -299,33 +300,41 @@ public class PrepareHttpInsertUpdate : PrepareHttpBase<int>
         CreatePayloadHttpElma.WebItem(name, value, ref webData);
         return this;
     }
-
     public PrepareHttpInsertUpdate ItemDateOnly(string name, DateOnly dateOnly)
     {
         var parseDate = $"{dateOnly.Year}-{dateOnly.Month}-{dateOnly.Day}";
         
         return WebItem(name, parseDate);
     }
-    public PrepareHttpInsertUpdate ItemDateOnlySetNull(string name) => WebItem(name, null);
-
     public PrepareHttpInsertUpdate ItemDateTime(string nameItem, DateTime dateTime)
     {
         var parseDateTime = $"{dateTime.Month}/{dateTime.Day}/{dateTime.Year} {dateTime.Hour}:{dateTime.Minute}:00";
 
         return WebItem(nameItem, parseDateTime);
     }
-    public PrepareHttpInsertUpdate ItemDateTimeSetNull(string nameItem) => WebItem(nameItem, null);
-
     public PrepareHttpInsertUpdate ItemInteger(string nameItem, long value) => WebItem(nameItem, value.ToString());
-    public PrepareHttpInsertUpdate ItemIntegerSetNull(string nameItem) => WebItem(nameItem, null);
-
     public PrepareHttpInsertUpdate ItemDouble(string nameItem, double value) => 
         WebItem(nameItem, Math.Round(value, 2).ToString().Replace(",", "."));
-    public PrepareHttpInsertUpdate ItemDoubleSetNull(string nameItem) => WebItem(nameItem, null);
     public PrepareHttpInsertUpdate ItemMoney(string nameItem, double value) => 
         WebItem(nameItem, Math.Round(value, 2).ToString().Replace(",", "."));
-    
     public PrepareHttpInsertUpdate ItemMoneySetNull(string nameItem) => WebItem(nameItem, "");
+    public PrepareHttpInsertUpdate ItemTimeInterval(string nameItem, TimeInterval timeInterval) =>
+        WebItem(nameItem, $"{timeInterval.Days}.{timeInterval.Hours}:{timeInterval.Minutes}:00");
+    public PrepareHttpInsertUpdate ItemSetNull(string nameItem) => WebItem(nameItem, null);
+    public PrepareHttpInsertUpdate ItemBoolean(string nameItem, bool value) => WebItem(nameItem, value.ToString());
+    public PrepareHttpInsertUpdate ItemUrl(string nameItem, Uri url) => WebItem(nameItem, url.ToString());
+    public PrepareHttpInsertUpdate ItemLine(string nameItem, string value)
+    {
+        int searchLines = Regex.Matches(value, "\n").Count + 1;
+
+        if (searchLines != 1)
+            throw new Exception("For WebItem with type Line there should be only one Line of text. Value: " + value);
+
+        return WebItem(nameItem, value);
+    }
+    public PrepareHttpInsertUpdate ItemText(string nameItem, string value) => WebItem(nameItem, value);
+    public PrepareHttpInsertUpdate ItemHtml(string nameItem, string value) => WebItem(nameItem, value);
+
 
     /// <summary>
     /// Создать новый WebItem ссылка на завизимый объект другой сущности,
