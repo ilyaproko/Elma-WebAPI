@@ -91,12 +91,8 @@ public class QParamsBase
         return  this;
     }
 }
-interface IPrepareHttpBase<T>
-{
-    public Task<T?> Execute();
-}
 
-public class PrepareHttpBase<T> : QParamsBase, IPrepareHttpBase<T> 
+public class PrepareHttpBase<T> : QParamsBase
 {
     protected HttpClient _httpClient;
     protected NameValueCollection queryParamsUrl = HttpUtility.ParseQueryString(string.Empty);
@@ -230,54 +226,24 @@ public class PrepareHttpLoad<T> : PrepareHttpBase<T>
     }
 }
 
-public class PrepareHttpInsertUpdate : PrepareHttpBase<int>
+public class BaseMakeWebData
 {
     public WebData webData = new WebData();
     public ObjectElma TypeObject;
-    private List<ObjectElma> AvailableElmaObjects;
-    private ElmaClient _elmaClient;
-    private long? CurrentIdObject;
-    public PrepareHttpInsertUpdate(
-        HttpClient httpClient,
-        ObjectElma typeObj,
-        string pathUrl,
-        HttpMethod httpMethod,
-        RefreshTokenDelegate refToken,
-        List<ObjectElma> availableObjects,
+    protected List<ObjectElma> AvailableElmaObjects;
+    protected ElmaClient _elmaClient;
+    protected long? CurrentIdObject;
+
+    public BaseMakeWebData(
+        ObjectElma objectElma,
+        List<ObjectElma> availableElmaObjects,
         ElmaClient elmaClient,
-        long? currentIdObject = null)
-        : base(httpClient, pathUrl, httpMethod, refToken) 
+        long? currentIdObject)
     {
-        TypeObject = typeObj;
-        AvailableElmaObjects = availableObjects;
+        TypeObject = objectElma;
+        AvailableElmaObjects = availableElmaObjects;
         _elmaClient = elmaClient;
         CurrentIdObject = currentIdObject;
-    }
-
-    public async new Task<int> Execute()
-    {
-        // for update AuthToken and SessionToken if they'are not actual
-        await refToken();
-
-        var request = new HttpRequestMessage(httpMethod, pathUrl);
-
-        request.Content = new StringContent(JsonConvert.SerializeObject(webData), Encoding.UTF8, "application/json");
-
-        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json")
-        {
-            CharSet = "utf-8"
-        };
-
-        var response = await _httpClient.SendAsync(request);
-
-        // if response from server wan't equels 200 (successful result), then throw exception
-        if ((int)response.StatusCode != 200)
-            throw new Exception("Bad request, server's body response:> " 
-                + await response.Content.ReadAsStringAsync());
-
-        var body = await response.Content.ReadAsStringAsync();
-
-        return int.Parse(body.Replace("\"", String.Empty));
     }
 
     /// <summary>
@@ -285,7 +251,7 @@ public class PrepareHttpInsertUpdate : PrepareHttpBase<int>
     /// тогда заменит значение в данном WebItem с названием name. Перед созданием происходит проверка
     /// названия WebItem name, есть ли похожее поле в Объекте Elma, если нет тогда выбросит ошибку
     /// </summary>
-    private PrepareHttpInsertUpdate WebItem(string name, string? value)
+    private void WebItem(string name, string? value)
     {
         // check if the name exists for certain object elma which the WebItem creating
         // if the Name Of creating Item don't specified then throw Exception
@@ -298,43 +264,40 @@ public class PrepareHttpInsertUpdate : PrepareHttpBase<int>
         }
 
         CreatePayloadHttpElma.WebItem(name, value, ref webData);
-        return this;
     }
-    public PrepareHttpInsertUpdate ItemDateOnly(string name, DateOnly dateOnly)
+    public void ItemDateOnly(string name, DateOnly dateOnly)
     {
         var parseDate = $"{dateOnly.Year}-{dateOnly.Month}-{dateOnly.Day}";
-        
-        return WebItem(name, parseDate);
+        WebItem(name, parseDate);
     }
-    public PrepareHttpInsertUpdate ItemDateTime(string nameItem, DateTime dateTime)
+    public void ItemDateTime(string nameItem, DateTime dateTime)
     {
         var parseDateTime = $"{dateTime.Month}/{dateTime.Day}/{dateTime.Year} {dateTime.Hour}:{dateTime.Minute}:00";
 
-        return WebItem(nameItem, parseDateTime);
+        WebItem(nameItem, parseDateTime);
     }
-    public PrepareHttpInsertUpdate ItemInteger(string nameItem, long value) => WebItem(nameItem, value.ToString());
-    public PrepareHttpInsertUpdate ItemDouble(string nameItem, double value) => 
+    public void ItemInteger(string nameItem, long value) => WebItem(nameItem, value.ToString());
+    public void ItemDouble(string nameItem, double value) => 
         WebItem(nameItem, Math.Round(value, 2).ToString().Replace(",", "."));
-    public PrepareHttpInsertUpdate ItemMoney(string nameItem, double value) => 
+    public void ItemMoney(string nameItem, double value) => 
         WebItem(nameItem, Math.Round(value, 2).ToString().Replace(",", "."));
-    public PrepareHttpInsertUpdate ItemMoneySetNull(string nameItem) => WebItem(nameItem, "");
-    public PrepareHttpInsertUpdate ItemTimeInterval(string nameItem, TimeInterval timeInterval) =>
+    public void ItemMoneySetNull(string nameItem) => WebItem(nameItem, "");
+    public void ItemTimeInterval(string nameItem, TimeInterval timeInterval) =>
         WebItem(nameItem, $"{timeInterval.Days}.{timeInterval.Hours}:{timeInterval.Minutes}:00");
-    public PrepareHttpInsertUpdate ItemSetNull(string nameItem) => WebItem(nameItem, null);
-    public PrepareHttpInsertUpdate ItemBoolean(string nameItem, bool value) => WebItem(nameItem, value.ToString());
-    public PrepareHttpInsertUpdate ItemUrl(string nameItem, Uri url) => WebItem(nameItem, url.ToString());
-    public PrepareHttpInsertUpdate ItemLine(string nameItem, string value)
+    public void ItemSetNull(string nameItem) => WebItem(nameItem, null);
+    public void ItemBoolean(string nameItem, bool value) => WebItem(nameItem, value.ToString());
+    public void ItemUrl(string nameItem, Uri url) => WebItem(nameItem, url.ToString());
+    public void ItemLine(string nameItem, string value)
     {
         int searchLines = Regex.Matches(value, "\n").Count + 1;
 
         if (searchLines != 1)
             throw new Exception("For WebItem with type Line there should be only one Line of text. Value: " + value);
 
-        return WebItem(nameItem, value);
+        WebItem(nameItem, value);
     }
-    public PrepareHttpInsertUpdate ItemText(string nameItem, string value) => WebItem(nameItem, value);
-    public PrepareHttpInsertUpdate ItemHtml(string nameItem, string value) => WebItem(nameItem, value);
-
+    public void ItemText(string nameItem, string value) => WebItem(nameItem, value);
+    public void ItemHtml(string nameItem, string value) => WebItem(nameItem, value);
 
     /// <summary>
     /// Создать новый WebItem ссылка на завизимый объект другой сущности,
@@ -381,6 +344,59 @@ public class PrepareHttpInsertUpdate : PrepareHttpBase<int>
             _elmaClient,
             (long)CurrentIdObject!,
             this.TypeObject.Name);
+    }
+}
+
+public class PrepareHttpInsertUpdate : BaseMakeWebData // : PrepareHttpBase<int>
+{
+    protected HttpClient _httpClient;
+    protected NameValueCollection queryParamsUrl = HttpUtility.ParseQueryString(string.Empty);
+    protected string PathUrl;
+    protected HttpMethod HttpMethod;
+    protected RefreshTokenDelegate RefToken;
+
+    public PrepareHttpInsertUpdate(
+        HttpClient httpClient,
+        ObjectElma typeObj,
+        string pathUrl,
+        HttpMethod httpMethod,
+        RefreshTokenDelegate refToken,
+        List<ObjectElma> availableObjects,
+        ElmaClient elmaClient,
+        long? currentIdObject = null)
+        : base(typeObj, availableObjects, elmaClient, currentIdObject)
+    {
+        _httpClient = httpClient;
+        PathUrl = pathUrl;
+        HttpMethod = httpMethod;
+        RefToken = refToken;
+        TypeObject = typeObj;
+    }
+
+    public async Task<int> Execute()
+    {
+        // for update AuthToken and SessionToken if they'are not actual
+        await RefToken();
+
+        var request = new HttpRequestMessage(HttpMethod, PathUrl);
+
+        request.Content = new StringContent(JsonConvert.SerializeObject(webData), Encoding.UTF8, "application/json");
+
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json")
+        {
+            CharSet = "utf-8"
+        };
+
+        var response = await _httpClient.SendAsync(request);
+
+        // if response from server wan't equels 200 (successful result), then throw exception
+        if ((int)response.StatusCode != 200)
+            throw new Exception("Bad request, server's body response:> " 
+                + await response.Content.ReadAsStringAsync());
+
+        var body = await response.Content.ReadAsStringAsync();
+
+        return int.Parse(body.Replace("\"", String.Empty));
     }
 }
 

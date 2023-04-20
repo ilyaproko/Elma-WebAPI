@@ -1,6 +1,7 @@
 ﻿using EnvironmentModule;
 using Elmapi;
 using Newtonsoft.Json;
+using ElmaType;
 
 var env = new EnvModule(".env");
 
