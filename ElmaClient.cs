@@ -40,7 +40,7 @@ public class ElmaClient
     // url to get all starable processes 
     private readonly string UrlStarableProcesses = "/API/REST/Workflow/StartableProcesses";
     // url to get all starable processes from external apps
-    private readonly string UrlStarableProcessesExternalApps = "/API/REST/Workflow/StartableProcessesFromExternalApps";
+    // private readonly string UrlStarableProcessesExternalApps = "/API/REST/Workflow/StartableProcessesFromExternalApps";
     // url to html page with all elma acccessable elma entities
     private readonly string UrlPageTypes = "/API/Help/Types";
     // url to html page with specific Object's information (also will need UrlParameter 'uid')
@@ -350,6 +350,11 @@ public class ElmaClient
             Objects,
             this,
             id);
+    }
+
+    public MakeWebData MakeWebData()
+    {
+        return new MakeWebData(Objects, this);
     }
 
     /// <summary>

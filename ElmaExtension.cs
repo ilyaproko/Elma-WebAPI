@@ -226,7 +226,75 @@ public class PrepareHttpLoad<T> : PrepareHttpBase<T>
     }
 }
 
-public class BaseMakeWebData
+public class MakeWebData : IMakersWebData
+{
+    public WebData webData = new WebData();
+    private List<ObjectElma> _availableElmaObjects;
+    private ElmaClient _elmaClient;
+
+    public MakeWebData(List<ObjectElma> availableElmaObjects, ElmaClient elmaClient)
+    {
+        _availableElmaObjects = availableElmaObjects;
+        _elmaClient = elmaClient;
+    }
+
+    public void WebItem(string name, string? value)
+    {
+        CreatePayloadHttpElma.WebItem(name, value, ref webData);
+    }
+    public void ItemDateOnly(string name, DateOnly dateOnly)
+    {
+        var parseDate = $"{dateOnly.Year}-{dateOnly.Month}-{dateOnly.Day}";
+        WebItem(name, parseDate);
+    }
+    public void ItemDateTime(string nameItem, DateTime dateTime)
+    {
+        var parseDateTime = $"{dateTime.Month}/{dateTime.Day}/{dateTime.Year} {dateTime.Hour}:{dateTime.Minute}:00";
+
+        WebItem(nameItem, parseDateTime);
+    }
+    public void ItemInteger(string nameItem, long value) => WebItem(nameItem, value.ToString());
+    public void ItemDouble(string nameItem, double value) => 
+        WebItem(nameItem, Math.Round(value, 2).ToString().Replace(",", "."));
+    public void ItemMoney(string nameItem, double value) => 
+        WebItem(nameItem, Math.Round(value, 2).ToString().Replace(",", "."));
+    public void ItemMoneySetNull(string nameItem) => WebItem(nameItem, "");
+    public void ItemTimeInterval(string nameItem, TimeInterval timeInterval) =>
+        WebItem(nameItem, $"{timeInterval.Days}.{timeInterval.Hours}:{timeInterval.Minutes}:00");
+    public void ItemSetNull(string nameItem) => WebItem(nameItem, null);
+    public void ItemBoolean(string nameItem, bool value) => WebItem(nameItem, value.ToString());
+    public void ItemUrl(string nameItem, Uri url) => WebItem(nameItem, url.ToString());
+    public void ItemLine(string nameItem, string value)
+    {
+        int searchLines = Regex.Matches(value, "\n").Count + 1;
+
+        if (searchLines != 1)
+            throw new Exception("For WebItem with type Line there should be only one Line of text. Value: " + value);
+
+        WebItem(nameItem, value);
+    }
+    public void ItemText(string nameItem, string value) => WebItem(nameItem, value);
+    public void ItemHtml(string nameItem, string value) => WebItem(nameItem, value);
+
+
+    public WebItemObject ItemObject(string nameItem) 
+    {
+        return new WebItemObject(nameItem, ref webData, _availableElmaObjects, _elmaClient);
+    }
+
+    public WebItemObjects ItemObjects(string nameItem)
+    {
+        return new WebItemObjects(
+            nameItem,
+            ref webData,
+            _availableElmaObjects,
+            _elmaClient,
+            null,
+            null);
+    }
+}
+
+public class WebDataUpdateInsert : IMakersWebData
 {
     public WebData webData = new WebData();
     public ObjectElma TypeObject;
@@ -234,7 +302,7 @@ public class BaseMakeWebData
     protected ElmaClient _elmaClient;
     protected long? CurrentIdObject;
 
-    public BaseMakeWebData(
+    public WebDataUpdateInsert(
         ObjectElma objectElma,
         List<ObjectElma> availableElmaObjects,
         ElmaClient elmaClient,
@@ -251,7 +319,7 @@ public class BaseMakeWebData
     /// тогда заменит значение в данном WebItem с названием name. Перед созданием происходит проверка
     /// названия WebItem name, есть ли похожее поле в Объекте Elma, если нет тогда выбросит ошибку
     /// </summary>
-    private void WebItem(string name, string? value)
+    public void WebItem(string name, string? value)
     {
         // check if the name exists for certain object elma which the WebItem creating
         // if the Name Of creating Item don't specified then throw Exception
@@ -298,6 +366,23 @@ public class BaseMakeWebData
     }
     public void ItemText(string nameItem, string value) => WebItem(nameItem, value);
     public void ItemHtml(string nameItem, string value) => WebItem(nameItem, value);
+    public WebItemBlock ItemBlock(string nameItem)
+    {
+        // check if the name exists for certain object elma which the WebItem creating
+        // if the Name Of creating Item don't specified then throw Exception
+        if (!this.TypeObject.NamesFields.Contains(nameItem))
+            throw new Exception(
+                $"Elma Object \"{TypeObject.Name}\", don't have field \"{nameItem}\". "
+                + $"Available fileds: {String.Join(", ", TypeObject.NamesFields)}"
+            );
+
+        return new WebItemBlock(nameItem,
+            ref webData,
+            AvailableElmaObjects,
+            _elmaClient,
+            (long)CurrentIdObject!,
+            this.TypeObject.Name);
+    }
 
     /// <summary>
     /// Создать новый WebItem ссылка на завизимый объект другой сущности,
@@ -347,7 +432,7 @@ public class BaseMakeWebData
     }
 }
 
-public class PrepareHttpInsertUpdate : BaseMakeWebData // : PrepareHttpBase<int>
+public class PrepareHttpInsertUpdate : WebDataUpdateInsert
 {
     protected HttpClient _httpClient;
     protected NameValueCollection queryParamsUrl = HttpUtility.ParseQueryString(string.Empty);
@@ -597,6 +682,27 @@ static class CreatePayloadHttpElma
 
         }
     }
+
+    static public void WebItemBlock(string nameItem, List<WebData> webDatas, ref WebData webData)
+    {
+        webData ??= new WebData();
+        webData.Items ??= new List<WebDataItem>();
+
+        var tryFindItemBlock = webData.Items.FirstOrDefault(item => item.Name == nameItem);
+
+        // if didn't create before, then create new
+        if (tryFindItemBlock == null)
+        {
+            // create new item with reference objects
+            webData.Items.Add(
+                new WebDataItem { Name = nameItem, DataArray = webDatas }
+            );
+        }
+        else 
+        {
+            tryFindItemBlock.DataArray = webDatas;
+        }
+    }
 }
 
 public class BaseRefItem
@@ -614,6 +720,44 @@ public class BaseRefItem
         NameItem = nameItem;
         AvailableElmaObjects = availableElmaObjects;
         _elmaClient = elmaClient;
+    }
+}
+
+
+public class WebItemBlock : BaseRefItem
+{
+    public long CurrentIdObject;
+    public string NameObject;
+    public WebItemBlock(
+        string nameItem,
+        ref WebData webData,
+        List<ObjectElma> availableElmaObjects,
+        ElmaClient elmaClient,
+        long currentIdObject,
+        string nameObject
+        ) 
+        : base(
+            nameItem,
+            ref webData,
+            availableElmaObjects,
+            elmaClient) 
+    {
+        CurrentIdObject = currentIdObject;
+        NameObject = nameObject;
+    }
+
+    public void Ref(params MakeWebData[] webDatas) => 
+        CreatePayloadHttpElma.WebItemBlock(NameItem, webDatas.Select(elem => elem.webData).ToList(), ref WebData);
+
+    async public Task Add(params MakeWebData[] webDatas)
+    {     
+        var getCurrentObject = await _elmaClient.LoadEntity(NameObject!, (long)CurrentIdObject!).Execute();
+
+        var findItemBlock = getCurrentObject!.Items.First(item => item.Name == NameItem);
+
+        var JoinedCurrentAndNew = findItemBlock.DataArray.Concat(webDatas.Select(elme => elme.webData).ToList());
+
+        CreatePayloadHttpElma.WebItemBlock(NameItem, JoinedCurrentAndNew.ToList(), ref WebData);
     }
 }
 
@@ -658,15 +802,15 @@ public class WebItemObject : BaseRefItem
 
 public class WebItemObjects : BaseRefItem
 {
-    public long CurrentIdObject;
-    public string NameObject;
+    public long? CurrentIdObject;
+    public string? NameObject;
     public WebItemObjects(
         string nameItem,
         ref WebData webData,
         List<ObjectElma> availableElmaObjects,
         ElmaClient elmaClient,
-        long currentIdObject,
-        string nameObject
+        long? currentIdObject,
+        string? nameObject
         ) 
         : base(
             nameItem,
@@ -714,21 +858,28 @@ public class WebItemObjects : BaseRefItem
                 { throw new Exception($"Elma entity with id \"{id}\" isn't exist in Object \"{nameObject}\". " + ex.Message); }
         }
 
-        var getCurrentObject = await _elmaClient.LoadEntity(NameObject, CurrentIdObject).Execute();
-        var ItemIds = getCurrentObject!.Items.First(item => item.Name == NameItem);
-        var currIds = ItemIds.DataArray.Select(webData => webData.Items.First(item => item.Name == "Id").Value)
+        // ! If don't need to check existing object, its WebItem with ids referenced to another object. Or It's a Block WebItem
+        if (String.IsNullOrEmpty(NameObject) && CurrentIdObject == null)
+        {
+            CreatePayloadHttpElma.WebItemRefObjects(NameItem, ids.ToList(), ref WebData);
+            return;
+        }
+            
+        var getCurrentObject = await _elmaClient.LoadEntity(NameObject!, (long)CurrentIdObject!).Execute();
+        var findItemArray = getCurrentObject!.Items.First(item => item.Name == NameItem);
+        var itemIds = findItemArray.DataArray.Select(webData => webData.Items.First(item => item.Name == "Id").Value)
             .Where(id => !String.IsNullOrEmpty(id))
             .Select(id => long.Parse(id!)).ToList();
 
         ids.ToList().ForEach(id =>
         {
-            if (!currIds.Contains(id))
+            if (!itemIds.Contains(id))
             {
-                currIds.Add(id);
+                itemIds.Add(id);
             }
         });
 
-        CreatePayloadHttpElma.WebItemRefObjects(NameItem, currIds, ref WebData);
+        CreatePayloadHttpElma.WebItemRefObjects(NameItem, itemIds, ref WebData);
     }
 
     /// <summary>

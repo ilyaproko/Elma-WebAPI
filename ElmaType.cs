@@ -1,3 +1,4 @@
+using ExtensionElma;
 
 namespace ElmaType;
 
@@ -91,4 +92,24 @@ public class TimeInterval
         Hours = hours;
         Minutes = minutes;
     }
+}
+
+interface IMakersWebData
+{
+    void WebItem(string name, string? value);
+    void ItemDateOnly(string name, DateOnly dateOnly);
+    void ItemDateTime(string nameItem, DateTime dateTime);
+    void ItemInteger(string nameItem, long value);
+    void ItemDouble(string nameItem, double value);
+    void ItemMoney(string nameItem, double value);
+    void ItemMoneySetNull(string nameItem);
+    void ItemTimeInterval(string nameItem, TimeInterval timeInterval);
+    void ItemSetNull(string nameItem);
+    void ItemBoolean(string nameItem, bool value);
+    void ItemUrl(string nameItem, Uri url);
+    void ItemLine(string nameItem, string value);
+    void ItemText(string nameItem, string value);
+    void ItemHtml(string nameItem, string value);
+    WebItemObject ItemObject(string nameItem);
+    WebItemObjects ItemObjects(string nameItem);
 }
