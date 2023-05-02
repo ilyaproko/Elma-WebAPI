@@ -330,7 +330,8 @@ public class ElmaClient
             HttpMethod.Post,
             RefreshToken,
             Objects,
-            this);
+            this,
+            Enums);
     }
 
     /// <summary> update entity via id with new data </summary>
@@ -349,12 +350,13 @@ public class ElmaClient
             RefreshToken,
             Objects,
             this,
+            Enums,
             id);
     }
 
     public MakeWebData MakeWebData()
     {
-        return new MakeWebData(Objects, this);
+        return new MakeWebData(Objects, this, Enums);
     }
 
     /// <summary>

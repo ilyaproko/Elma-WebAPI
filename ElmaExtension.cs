@@ -231,11 +231,13 @@ public class MakeWebData : IMakersWebData
     public WebData webData = new WebData();
     private List<ObjectElma> _availableElmaObjects;
     private ElmaClient _elmaClient;
+    private List<EnumElma> _enums;
 
-    public MakeWebData(List<ObjectElma> availableElmaObjects, ElmaClient elmaClient)
+    public MakeWebData(List<ObjectElma> availableElmaObjects, ElmaClient elmaClient, List<EnumElma> enums)
     {
         _availableElmaObjects = availableElmaObjects;
         _elmaClient = elmaClient;
+        _enums = enums;
     }
 
     public void WebItem(string name, string? value)
@@ -275,8 +277,10 @@ public class MakeWebData : IMakersWebData
     }
     public void ItemText(string nameItem, string value) => WebItem(nameItem, value);
     public void ItemHtml(string nameItem, string value) => WebItem(nameItem, value);
-
-
+    public WebItemEnum ItemEnum(string nameItem)
+    {
+        return new WebItemEnum(nameItem, ref webData, _enums);
+    }
     public WebItemObject ItemObject(string nameItem) 
     {
         return new WebItemObject(nameItem, ref webData, _availableElmaObjects, _elmaClient);
@@ -301,17 +305,19 @@ public class WebDataUpdateInsert : IMakersWebData
     protected List<ObjectElma> AvailableElmaObjects;
     protected ElmaClient _elmaClient;
     protected long? CurrentIdObject;
-
+    protected List<EnumElma> _enums;
     public WebDataUpdateInsert(
         ObjectElma objectElma,
         List<ObjectElma> availableElmaObjects,
         ElmaClient elmaClient,
-        long? currentIdObject)
+        long? currentIdObject,
+        List<EnumElma> enums)
     {
         TypeObject = objectElma;
         AvailableElmaObjects = availableElmaObjects;
         _elmaClient = elmaClient;
         CurrentIdObject = currentIdObject;
+        _enums = enums;
     }
 
     /// <summary>
@@ -366,6 +372,10 @@ public class WebDataUpdateInsert : IMakersWebData
     }
     public void ItemText(string nameItem, string value) => WebItem(nameItem, value);
     public void ItemHtml(string nameItem, string value) => WebItem(nameItem, value);
+    public WebItemEnum ItemEnum(string nameItem)
+    {
+        return new WebItemEnum(nameItem, ref webData, _enums);
+    }
     public WebItemBlock ItemBlock(string nameItem)
     {
         // check if the name exists for certain object elma which the WebItem creating
@@ -448,8 +458,9 @@ public class PrepareHttpInsertUpdate : WebDataUpdateInsert
         RefreshTokenDelegate refToken,
         List<ObjectElma> availableObjects,
         ElmaClient elmaClient,
+        List<EnumElma> enums,
         long? currentIdObject = null)
-        : base(typeObj, availableObjects, elmaClient, currentIdObject)
+        : base(typeObj, availableObjects, elmaClient, currentIdObject, enums)
     {
         _httpClient = httpClient;
         PathUrl = pathUrl;
@@ -867,19 +878,38 @@ public class WebItemObjects : BaseRefItem
             
         var getCurrentObject = await _elmaClient.LoadEntity(NameObject!, (long)CurrentIdObject!).Execute();
         var findItemArray = getCurrentObject!.Items.First(item => item.Name == NameItem);
-        var itemIds = findItemArray.DataArray.Select(webData => webData.Items.First(item => item.Name == "Id").Value)
-            .Where(id => !String.IsNullOrEmpty(id))
+        var currIds = findItemArray.DataArray.Select(webData => webData.Items.First(item => item.Name == "Id").Value)
             .Select(id => long.Parse(id!)).ToList();
 
-        ids.ToList().ForEach(id =>
-        {
-            if (!itemIds.Contains(id))
-            {
-                itemIds.Add(id);
-            }
-        });
+        CreatePayloadHttpElma.WebItemRefObjects(NameItem, currIds.Union(ids).ToList(), ref WebData);
+    }
 
-        CreatePayloadHttpElma.WebItemRefObjects(NameItem, itemIds, ref WebData);
+    async public Task Remove(string nameObject, params long[] ids)
+    {
+        if (AvailableElmaObjects.FirstOrDefault(obj => obj.Name == nameObject) == null)
+            throw new Exception($"Elma entity with name \"{nameObject}\" isn't exist in server.");
+
+        foreach (var id in ids)
+        {
+            try
+                { await _elmaClient.LoadEntity(nameObject, id).Execute(); }
+            catch (Exception ex)
+                { throw new Exception($"Elma entity with id \"{id}\" isn't exist in Object \"{nameObject}\". " + ex.Message); }
+        }
+
+        // ! If don't need to check existing object, its WebItem with ids referenced to another object. Or It's a Block WebItem
+        if (String.IsNullOrEmpty(NameObject) && CurrentIdObject == null)
+        {
+            CreatePayloadHttpElma.WebItemRefObjects(NameItem, ids.ToList(), ref WebData);
+            return;
+        }
+
+        var getCurrentObject = await _elmaClient.LoadEntity(NameObject!, (long)CurrentIdObject!).Execute();
+        var findItemArray = getCurrentObject!.Items.First(item => item.Name == NameItem);
+        var currIds = findItemArray.DataArray.Select(webData => webData.Items.First(item => item.Name == "Id").Value)
+            .Select(id => long.Parse(id!)).ToList();
+
+        CreatePayloadHttpElma.WebItemRefObjects(NameItem, currIds.Except(ids).ToList(), ref WebData);
     }
 
     /// <summary>
@@ -888,5 +918,47 @@ public class WebItemObjects : BaseRefItem
     public void SetEmpty()
     {
         CreatePayloadHttpElma.WebItemRefObjects(NameItem, null, ref WebData);
+    }
+}
+
+public class WebItemEnum
+{
+    private List<EnumElma> _enums;
+    public WebData WebData;
+    private string _nameItem;
+    public WebItemEnum(string nameItem, ref WebData webData,List<EnumElma> enums)
+    {
+        _nameItem = nameItem;
+        WebData = webData;
+        _enums = enums;
+    }
+    
+    public void Value(string nameEnum, string valueEnum)
+    {
+        var tryFindEnum = _enums.FirstOrDefault(enumElma =>
+            enumElma.Name == nameEnum);
+
+        // if enum with name 'nameEnum' is not existed in storage then throw exception
+        if (tryFindEnum == null)
+            throw new Exception($"Enum with name: '{nameEnum}' isn't existed in storage");
+
+        // if the found enum don't have any Values then throw exception
+        if (tryFindEnum.Values == null)
+            throw new Exception($"The enum '{nameEnum}' doesn't have any values");
+
+
+        var tryFindIndexOfValue = Array.IndexOf(tryFindEnum.Values, valueEnum);
+
+        // if the value 'valueEnum' doesn't exist in storage the found enum, throw exception
+        if (tryFindIndexOfValue == -1)
+            throw new Exception($"The enum '{nameEnum}' doesn't have value '{valueEnum}'."
+                + $" All values: {String.Join(",", tryFindEnum.Values)}");
+
+        CreatePayloadHttpElma.WebItem(_nameItem, tryFindIndexOfValue.ToString(), ref WebData);
+    }
+
+    public void SetNull()
+    {
+        CreatePayloadHttpElma.WebItem(_nameItem, "", ref WebData);
     }
 }
