@@ -19,7 +19,7 @@ public class ElmaClient
     private readonly string Password;
     public ResponseAuthorization? AuthorizationData;
     private List<ObjectElma> Objects = new List<ObjectElma>(); // all available entities in elma
-    private List<ObjectElma> Processes = new List<ObjectElma>(); // all processes in elma
+    public List<ObjectElma> Processes = new List<ObjectElma>(); // all processes in elma
     private List<EnumElma> Enums = new List<EnumElma>(); // all available enums in server elma
     private List<ProcessElma> StartableProcesses = new List<ProcessElma>(); // all avaialbe processes to start in elma
     // url to get authorization token from elma server for requests
@@ -96,41 +96,25 @@ public class ElmaClient
             throw new Exception($"Process '{nameProcess}' isn't found. "
                 + $"All available process:> {String.Join(", ", StartableProcesses!.Select(elm => elm.Name))}");
 
+        var findInfoProcess = this.Processes.FirstOrDefault(process => process.NameDesc == nameProcess);
 
-        var prepareRequest = new PrepareHttpStartProcess(this._httpClient, UrlStartProcess, RefreshToken);
-        prepareRequest.WebItem("ProcessHeaderId", tryFindProcessElma.Id.ToString());
-        prepareRequest.WebItem("ProcessName", tryFindProcessElma.Name);
+        if (findInfoProcess == null) throw new Exception($"Couldn't find information about process \"{nameProcess}\"");
+
+        var prepareRequest = new PrepareHttpStartProcess(
+            this._httpClient,
+            UrlStartProcess,
+            RefreshToken,
+            findInfoProcess,
+            Objects,
+            this,
+            null,
+            Enums
+        );
+
+        prepareRequest.ItemSettings("ProcessHeaderId", tryFindProcessElma.Id.ToString());
+        prepareRequest.ItemSettings("ProcessName", tryFindProcessElma.Name);
 
         return prepareRequest;
-
-        // var request = new HttpRequestMessage(HttpMethod.Post, UrlStartProcess);
-
-        // request.Content = new StringContent(JsonConvert.SerializeObject(
-        //     new WebData 
-        //     {
-        //         Items = new List<WebDataItem>() 
-        //         {
-        //             new WebDataItem { Name = "ProcessHeaderId", Value = tryFindProcessElma.Id.ToString()},
-        //             new WebDataItem { Name = "ProcessName", Value = tryFindProcessElma.Name}
-        //         }
-        //     }
-        // ), Encoding.UTF8, "application/json");
-
-        // request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json")
-        // {
-        //     CharSet = "utf-8"
-        // };
-
-        // var response = await _httpClient.SendAsync(request);
-
-        // // if response from server wan't equels 200 (successful result), then throw exception
-        // if ((int)response.StatusCode != 200)
-        //     throw new Exception("Bad request, server's body response:> " 
-        //         + await response.Content.ReadAsStringAsync());
-
-        // var body = await response.Content.ReadAsStringAsync();
-
-        // System.Console.WriteLine(JsonConvert.SerializeObject(body));
     }
 
     /// <summary>

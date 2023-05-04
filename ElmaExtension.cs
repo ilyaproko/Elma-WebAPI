@@ -496,14 +496,24 @@ public class PrepareHttpInsertUpdate : WebDataUpdateInsert
     }
 }
 
-public class PrepareHttpStartProcess
+public class PrepareHttpStartProcess : WebDataUpdateInsert
 {
+    private WebData mainNodeWebData = new WebData();
     protected HttpClient _httpClient;
-    public WebData webData = new WebData();
     private string pathUrl;
     protected RefreshTokenDelegate refToken;
 
-    public PrepareHttpStartProcess(HttpClient httpClient, string pathUrl, RefreshTokenDelegate refToken)
+    public PrepareHttpStartProcess(
+        HttpClient httpClient,
+        string pathUrl,
+        RefreshTokenDelegate refToken,
+
+        ObjectElma objectElma,
+        List<ObjectElma> availableElmaObjects,
+        ElmaClient elmaClient,
+        long? currentIdObject,
+        List<EnumElma> enums
+        ) : base(objectElma, availableElmaObjects, elmaClient, currentIdObject, enums)
     {
         this._httpClient = httpClient;
         this.pathUrl = pathUrl;
@@ -515,13 +525,14 @@ public class PrepareHttpStartProcess
         // for update AuthToken and SessionToken if they'are not actual
         await refToken();
 
-        System.Console.WriteLine(JsonConvert.SerializeObject(webData));
+        mainNodeWebData.Items.Add(new WebDataItem { Name = "Context", Data = webData});
+
         // if data wasn't provided then throw an exception
         if (webData == null) throw new Exception("Field webData is null. Need data to upload to server");
 
         var request = new HttpRequestMessage(HttpMethod.Post, pathUrl);
 
-        request.Content = new StringContent(JsonConvert.SerializeObject(webData), Encoding.UTF8, "application/json");
+        request.Content = new StringContent(JsonConvert.SerializeObject(mainNodeWebData), Encoding.UTF8, "application/json");
 
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json")
         {
@@ -541,25 +552,11 @@ public class PrepareHttpStartProcess
     }
 
     /// <summary>
-    /// Создать новый WebItem с названием name и значением value, Если такой WebItem уже есть 
-    /// тогда заменит значение в данном WebItem с названием name. 
+    /// Настройки идентификаторов для конкретного бизнес-процесса
     /// </summary>
-    public PrepareHttpStartProcess WebItem(string name, string value)
+    public PrepareHttpStartProcess ItemSettings(string name, string value)
     {
-        CreatePayloadHttpElma.WebItem(name, value, ref webData);
-        return this;
-    }
-    
-    /// <summary>
-    /// Создать новый WebItem ссылка на завизимый объект другой сущности,
-    /// в параметре нужно указать имя поля (Item) для которой создатеся ссылка на объект,
-    /// вторым аргументов указывается уникальный идентификатор сущности на которую будет 
-    /// ссылвться данное поле. Чтобы указать что поле не ссылается ни на один объект нужно
-    /// вторым аргументом передать значение null
-    /// </summary>
-    public PrepareHttpStartProcess WebItemRefObject(string nameItem, int? id) 
-    {
-        CreatePayloadHttpElma.WebItemRefObject(nameItem, id, ref webData);
+        CreatePayloadHttpElma.WebItem(name, value, ref mainNodeWebData);
         return this;
     }
 }
@@ -933,7 +930,7 @@ public class WebItemEnum
         _enums = enums;
     }
     
-    public void Value(string nameEnum, string valueEnum)
+    public void SetValue(string nameEnum, string valueEnum)
     {
         var tryFindEnum = _enums.FirstOrDefault(enumElma =>
             enumElma.Name == nameEnum);

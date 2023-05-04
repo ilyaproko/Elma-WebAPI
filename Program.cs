@@ -12,6 +12,3 @@ var password = env.GetVar("PASSWORD");
 
 var elmaClient = await new ElmaClient(token, hostaddress, username, password).Build();
 
-
-
-
