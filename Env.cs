@@ -4,7 +4,7 @@ using System.IO;
 
 namespace EnvironmentModule;
 
-class EnvModule
+public class EnvModule
 {
     string pathFile;
 
