@@ -17,6 +17,7 @@ public class ElmaClient
     private readonly HttpClient _httpClient;
     private readonly string Username;
     private readonly string Password;
+    private DateTime _lastTimeUpdatedAuth;
     public ResponseAuthorization? AuthorizationData;
     private List<ObjectElma> Objects = new List<ObjectElma>(); // all available entities in elma
     public List<ObjectElma> Processes = new List<ObjectElma>(); // all processes in elma
@@ -74,17 +75,10 @@ public class ElmaClient
     /// <summary>
     /// check if authToken and sessionToken is no more active. Then get new tokens by IServiceAuthorization
     /// </summary>
-    public async Task RefreshToken() 
+    public async Task RefreshToken()
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, " /API/REST/Authorization/ServerTimeUTC");
-
-        var response = await _httpClient.SendAsync(request);
-
-        if ((int)response.StatusCode == 400)
-        {
-            var convertJson = await response.Content.ReadFromJsonAsync<ResponseElma>();
+        if (_lastTimeUpdatedAuth.AddMinutes(12) < DateTime.Now)
             await GetAuthorization();
-        }
     }
 
     public PrepareHttpStartProcess StartProcess(string nameProcess)
@@ -238,6 +232,8 @@ public class ElmaClient
         request.Content = new StringContent($"\"{Password}\"", Encoding.UTF8, "application/json");
 
         var response = await _httpClient.SendAsync(request);
+
+        _lastTimeUpdatedAuth = DateTime.Now;
 
         // if server return response with 'bad request' then throw exception about the error
         if ((int)response.StatusCode != 200)
