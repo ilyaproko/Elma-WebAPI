@@ -17,7 +17,7 @@ public class ElmaClient
     private readonly HttpClient _httpClient;
     private readonly string Username;
     private readonly string Password;
-    private DateTime _lastTimeUpdatedAuth;
+    public DateTime _lastTimeUpdatedAuth;
     public ResponseAuthorization? AuthorizationData;
     private List<ObjectElma> Objects = new List<ObjectElma>(); // all available entities in elma
     public List<ObjectElma> Processes = new List<ObjectElma>(); // all processes in elma
@@ -250,12 +250,12 @@ public class ElmaClient
 
     /// <summary> получение сущностей (объект-справочник) от сервера elma </summary>
     /// <param name="type">имя униклього идентификтора типа сущности elma</param>
-    public PrepareHttpQuery<List<WebData>> QueryEntity(string type)
+    public PrepareHttpQuery QueryEntity(string type)
     {
         // получаем тип обьекта по его наименованию и его TypeUID для запросов
         var getTypeObj = this.GetTypeObj(type, TypesObj.Entity);
 
-        var prepareQuery = new PrepareHttpQuery<List<WebData>>(
+        var prepareQuery = new PrepareHttpQuery(
             _httpClient, 
             getTypeObj.Uid, 
             UrlEntityQueryTree, 

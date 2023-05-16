@@ -137,18 +137,18 @@ public class PrepareHttpBase<T> : QParamsBase
     }
 }
 
-public class PrepareHttpQuery<T> : PrepareHttpBase<T>
+public class PrepareHttpQuery : PrepareHttpBase<List<WebData>>
 {
     public PrepareHttpQuery(HttpClient httpClient, string typeUid, string pathUrl, HttpMethod httpMethod, RefreshTokenDelegate refToken)
          : base(httpClient, pathUrl, httpMethod, refToken) { }
 
-    public new PrepareHttpQuery<T> TypeUid(string value) 
+    public new PrepareHttpQuery TypeUid(string value) 
     {
         base.TypeUid(value);
         return this;
     }
     /// <summary> create url parameter for Eql (elma query lanaguage) for difficult query to Elma</summary>
-    public new PrepareHttpQuery<T> Eql(string value) 
+    public new PrepareHttpQuery Eql(string value) 
     {
         base.Eql(value);
         return this;
@@ -163,24 +163,24 @@ public class PrepareHttpQuery<T> : PrepareHttpBase<T>
     /// требуется выбрать только свойства Тема, Описание и для свойства Автор (тип объекта Пользователь)
     /// выбрать свойства Логин и Полное имя;
     /// </summary>
-    public new PrepareHttpQuery<T> Select(string value) 
+    public new PrepareHttpQuery Select(string value) 
     {
         base.Select(value);
         return this;
     }
     /// <summary> specify how many objects need to get </summary>
-    public new PrepareHttpQuery<T> Limit(int value) 
+    public new PrepareHttpQuery Limit(int value) 
     {
         base.Limit(value);
         return this;
     }
     /// <summary> specify the start (сдвиг) element </summary>
-    public new PrepareHttpQuery<T> Offset(int value) 
+    public new PrepareHttpQuery Offset(int value) 
     {
         base.Offset(value);
         return this;
     }
-    public new PrepareHttpQuery<T> Sort(string value) 
+    public new PrepareHttpQuery Sort(string value) 
     {
         base.Sort(value);
         return this;
@@ -190,10 +190,36 @@ public class PrepareHttpQuery<T> : PrepareHttpBase<T>
     /// Наименование свойства возможно задавать с точкой (.) для получения доступа к подсвойству: Property1.Property2:Значение1
     /// Для указания в значении свойства символа : (двоеточие), \ (обратный слэш) или , (запятая), его нужно экранировать черз \ (обратный слэш)
     /// </summary>
-    public new PrepareHttpQuery<T> Filter(string value) 
+    public new PrepareHttpQuery Filter(string value) 
     {
         base.Filter(value);
         return this;
+    }
+
+    /// <summary>
+    /// return first found entity's id even if there more than one entities.
+    /// if there no entities which equivelant request query than return null.
+    /// </summary>
+    public async Task<int?> GetFirstId()
+    {
+        var requestQuery = await Execute();
+
+        if (requestQuery == null || requestQuery.Count() == 0) return null;
+
+        return int.Parse(requestQuery.First().Items.First(item => item.Name == "Id").Value!);
+    }
+
+    /// <summary>
+    /// return all found entities' ids. If there no found entities which equivelant request query
+    /// than return null;
+    /// </summary>
+    public async Task<IEnumerable<int>?> GetIds()
+    {
+        var requestQuery = await Execute();
+
+        if (requestQuery == null || requestQuery.Count() == 0) return null;
+
+        return requestQuery.Select(obj => int.Parse(obj.Items.First(item => item.Name == "Id").Value!));
     }
 }
 public class PrepareHttpLoad<T> : PrepareHttpBase<T>

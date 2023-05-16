@@ -10,5 +10,4 @@ var hostaddress = env.GetVar("HOSTADDR");
 var username = env.GetVar("USERNAME");
 var password = env.GetVar("PASSWORD");
 
-var elmaClient = await new ElmaClient(token, hostaddress, username, password).Build();
-
+var eClient = await new ElmaClient(token, hostaddress, username, password).Build();
