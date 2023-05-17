@@ -56,7 +56,7 @@ var getUsers = await elmaClient.QueryEntity("User").Eql("BirthDate < DateTime(19
 В случаи когда необходимо получить только идентификатор первой найденной сущности можно воспользоваться асинхронным метод GetFirstId(), если нужно вернуть идентификаторы для всех найденных сущностей тогда воспользуйтесь асинхронным методом GetIds(). Если сервер не сможет найти сущности по заданным критериям тогда данные методы вернут null.
 
 ```C#
-await elmaClient.QueryEntity("User").Eql("BirthDate < DateTime(1983, 7, 20)").GetFirstId(); // -> 421
+await elmaClient.QueryEntity("User").Eql("BirthDate < DateTime(1983, 7, 20)").GetFirstId(); // -> 38
 await elmaClient.QueryEntity("User").Eql("BirthDate < DateTime(1983, 7, 20)").GetIds(); // -> 38, 321, 421, 90
 ```
 
